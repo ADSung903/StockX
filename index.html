@@ -179,7 +179,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
   <div class="logo">AD Stock X Dashboard <em>_v3</em></div>
   <div class="header-right">
     <div id="clock">—</div>
-    <div id="last-update">尚未更新</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="last-update">尚未更新</div>
+      <button onclick="hardReset()" style="font-size:10px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer" title="清除快取並重新整理">重設</button>
+    </div>
   </div>
 </header>
 
@@ -757,9 +760,14 @@ function rmWatch(i){
 document.getElementById('ai-code').addEventListener('keydown',e=>{ if(e.key==='Enter') addWatch(); });
 
 // ─── 初始化 & 定時刷新 ────────────────────
+function hardReset(){
+  if(!confirm('清除所有本地設定（自選股、題材）並重新整理？')) return;
+  localStorage.clear();
+  location.reload();
+}
+
 async function init(){
   buildTabs();
-  // 四個模組並發，互不等待
   loadMarkets();
   loadSectorData();
   renderTopics();
