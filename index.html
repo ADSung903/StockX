@@ -304,6 +304,25 @@ async function loadMarkets(){
   stampUpdate();
 }
 
+// ─── 個股名稱對照表 ───────────────────────
+const NAMES = {
+  '2330':'台積電','2454':'聯發科','3711':'日月光','2303':'聯電','3034':'聯詠',
+  '6770':'力積電','2325':'矽品', '3037':'欣興', '8046':'南電', '2344':'華邦電',
+  '6415':'矽力KY','3661':'世芯', '2049':'上銀', '3293':'鈊象', '5269':'祥碩',
+  '2379':'瑞昱', '3533':'嘉澤', '3189':'景碩', '2408':'南亞科','3481':'群創',
+  '2409':'友達', '3535':'晶彩科','3580':'友威科','6803':'崇越電','6598':'允強',
+  '3008':'大立光','2352':'佳世達','6719':'威鋒電','4966':'譜瑞',
+  '2317':'鴻海', '2382':'廣達', '3231':'緯創', '2308':'台達電','2498':'宏達電',
+  '3045':'台灣大','2324':'仁寶', '3006':'晶豪科','2354':'鴻準', '2395':'研華',
+  '3706':'神達', '4958':'臻鼎', '2313':'華通', '3081':'聯亞',
+  '6669':'緯穎', '2455':'全新', '4749':'新應材',
+  '2882':'國泰金','2881':'富邦金','2886':'兆豐金','2884':'玉山金','2891':'中信金',
+  '2885':'元大金','2892':'第一金','2880':'華南金','2834':'台企銀','5880':'合庫金',
+  '3711':'日月光','2383':'台光電','8213':'志超', '3491':'昇達科','3169':'亞信',
+  '6975':'宸宇', '2326':'台揚', '6548':'長科', '2325':'矽品',
+};
+const sn = code => NAMES[code] || code;
+
 // ─── 產業 & 熱力圖 ────────────────────────
 const SECTORS = {
   '半導體':    ['2330','2454','3711','2303','3034','6770','2325','3037','8046','2344','6415','3661','2049','3293','5269','2379','3533','3189','2408'],
@@ -333,13 +352,13 @@ function drawHeatmap(){
   const codes = SECTORS[activeSector];
   const items = codes.map(c=>{
     const q=cache[c+'.TW']; if(!q) return null;
-    return {code:c, price:q.price, chg:q.chg, bias:q.bias, vol:q.vol};
+    return {code:c, name:sn(c), price:q.price, chg:q.chg, bias:q.bias, vol:q.vol};
   }).filter(Boolean);
   if(!items.length){ document.getElementById('heatmap-wrap').innerHTML='<div class="loading-msg">資料載入中…</div>'; return; }
 
   const wrap = document.getElementById('heatmap-wrap');
   wrap.innerHTML='';
-  const W = wrap.clientWidth||360, H = Math.max(280,Math.floor(W*0.5));
+  const W = wrap.clientWidth||360, H = Math.max(300,Math.floor(W*0.52));
   const svg = d3.select(wrap).append('svg').attr('width',W).attr('height',H);
 
   const root = d3.hierarchy({children:items.map(d=>({...d,value:1}))}).sum(d=>d.value);
@@ -357,23 +376,62 @@ function drawHeatmap(){
     .attr('rx',3).attr('fill',d=>cs(d.data.chg)).attr('stroke','#0a0c10').attr('stroke-width',1.5);
 
   cell.each(function(d){
-    const w=d.x1-d.x0,h=d.y1-d.y0,g=d3.select(this);
-    if(w<22||h<16) return;
-    g.append('text').attr('x',w/2).attr('y',h>32?h/2-7:h/2)
-      .attr('text-anchor','middle').attr('dominant-baseline','middle')
-      .attr('fill','rgba(255,255,255,.88)').attr('font-size',Math.min(12,Math.max(8,w/4.5))).attr('font-weight','700')
-      .text(d.data.code);
-    if(h>30){
-      g.append('text').attr('x',w/2).attr('y',h/2+7)
+    const w=d.x1-d.x0, h=d.y1-d.y0, g=d3.select(this);
+    if(w<24||h<18) return;
+
+    const hasRoom4Lines = h>62;  // 名稱+代碼+漲跌+乖離
+    const hasRoom3Lines = h>46;  // 名稱+代碼+漲跌
+    const hasRoom2Lines = h>30;  // 名稱+漲跌
+    const nameFontSize  = Math.min(12, Math.max(9, w/5));
+    const codeFontSize  = Math.min(10, Math.max(8, w/6));
+    const chgFontSize   = Math.min(10, Math.max(7, w/6));
+
+    if(hasRoom3Lines){
+      // 名稱
+      g.append('text').attr('x',w/2).attr('y',h/2-(hasRoom4Lines?16:10))
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill','rgba(255,255,255,.95)').attr('font-size',nameFontSize).attr('font-weight','700')
+        .text(d.data.name);
+      // 代碼
+      g.append('text').attr('x',w/2).attr('y',h/2-(hasRoom4Lines?4:0)+( hasRoom3Lines&&!hasRoom4Lines?2:0 ))
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill','rgba(255,255,255,.5)').attr('font-size',codeFontSize)
+        .text(d.data.code);
+      // 漲跌
+      g.append('text').attr('x',w/2).attr('y',h/2+(hasRoom4Lines?8:12))
         .attr('text-anchor','middle').attr('dominant-baseline','middle')
         .attr('fill',d.data.chg>0?'rgba(120,255,200,.9)':'rgba(255,120,130,.9)')
-        .attr('font-size',Math.min(10,Math.max(7,w/5.5)))
+        .attr('font-size',chgFontSize).attr('font-weight','600')
         .text((d.data.chg>=0?'+':'')+d.data.chg.toFixed(1)+'%');
+      // 乖離率（空間夠才顯示）
+      if(hasRoom4Lines && d.data.bias!==null){
+        g.append('text').attr('x',w/2).attr('y',h/2+22)
+          .attr('text-anchor','middle').attr('dominant-baseline','middle')
+          .attr('fill','rgba(255,255,255,.4)').attr('font-size',Math.max(7,chgFontSize-1))
+          .text('偏'+(d.data.bias>=0?'+':'')+d.data.bias.toFixed(1)+'%');
+      }
+    } else if(hasRoom2Lines){
+      // 名稱 + 漲跌（小方塊）
+      g.append('text').attr('x',w/2).attr('y',h/2-7)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill','rgba(255,255,255,.9)').attr('font-size',Math.min(11,nameFontSize)).attr('font-weight','700')
+        .text(d.data.name);
+      g.append('text').attr('x',w/2).attr('y',h/2+7)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill',d.data.chg>0?'rgba(120,255,200,.85)':'rgba(255,120,130,.85)')
+        .attr('font-size',Math.max(7,chgFontSize))
+        .text((d.data.chg>=0?'+':'')+d.data.chg.toFixed(1)+'%');
+    } else {
+      // 超小方塊只顯示名稱
+      g.append('text').attr('x',w/2).attr('y',h/2)
+        .attr('text-anchor','middle').attr('dominant-baseline','middle')
+        .attr('fill','rgba(255,255,255,.85)').attr('font-size',Math.min(10,nameFontSize))
+        .text(d.data.name);
     }
   });
 
   cell.on('mousemove',(ev,d)=>{
-    document.getElementById('tip-nm').textContent=d.data.code;
+    document.getElementById('tip-nm').textContent=`${d.data.name}（${d.data.code}）`;
     document.getElementById('tip-pr').textContent=fp(d.data.price);
     const ch=document.getElementById('tip-ch');
     ch.style.color=d.data.chg>=0?'var(--up)':'var(--down)';
@@ -382,7 +440,7 @@ function drawHeatmap(){
     bi.style.color=biasColor(d.data.bias);
     bi.textContent=fb(d.data.bias);
     document.getElementById('tip-vo').textContent=d.data.vol?Math.round(d.data.vol/1000)+'K':'—';
-    tip.style.cssText+=';display:block';
+    tip.style.display='block';
     tip.style.left=(ev.clientX+14)+'px';
     tip.style.top=(ev.clientY-8)+'px';
   }).on('mouseleave',()=>{ tip.style.display='none'; });
