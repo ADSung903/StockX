@@ -284,14 +284,20 @@ async function apiQuote(symbols){
   const need = symbols.filter(s=>{
     const c=cache[s]; return !c || Date.now()-c.ts > CHART_TTL;
   });
+  console.log('[apiQuote] need:', need.length, need.slice(0,3));
   if(need.length){
     try{
-      const r = await fetch(`/api/quote?symbols=${need.join(',')}`);
+      const url = `/api/quote?symbols=${need.join(',')}`;
+      console.log('[apiQuote] fetching:', url);
+      const r = await fetch(url);
+      console.log('[apiQuote] status:', r.status);
       const d = await r.json();
+      console.log('[apiQuote] keys:', Object.keys(d).length, 'sample:', JSON.stringify(Object.entries(d)[0]));
       Object.entries(d).forEach(([sym,q])=>{
         if(q) cache[sym]={...q, ts:Date.now()};
       });
-    }catch(e){ console.warn('quote API error',e); }
+      console.log('[apiQuote] cache size:', Object.keys(cache).length);
+    }catch(e){ console.error('[apiQuote] ERROR:', e); }
   }
 }
 
@@ -532,7 +538,7 @@ function tempHTML(t){
 }
 
 // ─── 預設題材 & 自選股 ────────────────────
-let topics = JSON.parse(localStorage.getItem('adsx_top')||'null') || {
+const DEFAULT_TOPICS = {
   'AI 晶片供應鏈':{
     tier1:[{n:'台積電',c:'2330'},{n:'聯發科',c:'2454'}],
     tier2:[{n:'日月光',c:'3711'},{n:'矽品',c:'2325'},{n:'南電',c:'8046'}],
@@ -549,6 +555,22 @@ let topics = JSON.parse(localStorage.getItem('adsx_top')||'null') || {
     tier3:[{n:'嘉澤',c:'3533'},{n:'欣興',c:'3037'}],
   },
 };
+
+function loadTopics(){
+  try{
+    const raw = JSON.parse(localStorage.getItem('adsx_top')||'null');
+    if(!raw) return DEFAULT_TOPICS;
+    // 驗證格式：每個題材必須有 tier1/tier2/tier3 且都是陣列且元素有 c 屬性
+    const valid = Object.values(raw).every(t=>
+      Array.isArray(t.tier1) && Array.isArray(t.tier2) && Array.isArray(t.tier3) &&
+      [...t.tier1,...t.tier2,...t.tier3].every(s=>s&&typeof s.c==='string')
+    );
+    if(!valid){ console.warn('[topics] 舊格式，重設'); localStorage.removeItem('adsx_top'); return DEFAULT_TOPICS; }
+    return raw;
+  }catch{ return DEFAULT_TOPICS; }
+}
+
+let topics = loadTopics();
 
 let watchList = JSON.parse(localStorage.getItem('adsx_wl')||'null') || [
   {code:'2330.TW',name:'台積電',cost:2059.52},
@@ -600,19 +622,33 @@ function buildTopicHTML(){
 async function renderTopics(){
   const el=document.getElementById('topic-body');
   el.innerHTML='<div class="loading-msg">拉取報價中…</div>';
-  const allCodes=[...new Set(Object.values(topics).flatMap(t=>[...t.tier1,...t.tier2,...t.tier3].map(s=>s.c+'.TW')))];
 
-  // 先拉股價，立刻渲染
+  // 容錯：確保每個 tier 都是陣列，且每個 stock 有 c 屬性
+  const allCodes=[...new Set(
+    Object.values(topics).flatMap(t=>{
+      const t1=Array.isArray(t.tier1)?t.tier1:[];
+      const t2=Array.isArray(t.tier2)?t.tier2:[];
+      const t3=Array.isArray(t.tier3)?t.tier3:[];
+      return [...t1,...t2,...t3].filter(s=>s&&s.c).map(s=>s.c+'.TW');
+    })
+  )];
+
+  console.log('[renderTopics] allCodes:', allCodes.length, allCodes);
+
+  if(!allCodes.length){
+    el.innerHTML='<div class="loading-msg">題材清單格式異常，請清除瀏覽器快取後重新整理</div>';
+    return;
+  }
+
   await apiQuote(allCodes);
   el.innerHTML = buildTopicHTML();
 
-  // 體質資料背景拉，拉到了再更新各 pill（不阻塞畫面）
   apiFundamental(allCodes).then(()=>{
     allCodes.forEach(sym=>{
       const code=sym.replace('.TW','');
       const s={c:code, n:NAMES[code]||code};
-      const el=document.getElementById('pill-'+code);
-      if(el) el.outerHTML=buildPill(s, true);
+      const pill=document.getElementById('pill-'+code);
+      if(pill) pill.outerHTML=buildPill(s, true);
     });
   });
 }
