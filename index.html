@@ -10,7 +10,7 @@
   --bg:#0a0c10;--bg2:#111318;--bg3:#181b24;--bg4:#1e2235;
   --border:rgba(255,255,255,0.055);--border2:rgba(255,255,255,0.11);
   --text:#d8ddf0;--muted:#4e566e;--muted2:#7e8aa8;
-  --up:#00c896;--down:#ff4560;--warn:#f0a500;--accent:#4e8ef7;--ghost:#b06dff;
+  --up:#e85454;--down:#2ecc8e;--warn:#f0a500;--accent:#4e8ef7;--ghost:#b06dff;
   --r:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -119,6 +119,23 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .li{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted2)}
 .ld{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 
+/* modal */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:none;align-items:flex-end;justify-content:center}
+.modal-backdrop.open{display:flex}
+@media(min-width:600px){.modal-backdrop{align-items:center}}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:12px 12px 0 0;width:100%;max-width:480px;padding:20px 16px 32px;display:flex;flex-direction:column;gap:12px}
+@media(min-width:600px){.modal{border-radius:12px;padding:20px}}
+.modal-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.modal label{font-size:11px;color:var(--muted2);display:block;margin-bottom:4px}
+.modal input,.modal textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 11px;font-size:13px;outline:none;font-family:inherit}
+.modal input:focus,.modal textarea:focus{border-color:var(--accent)}
+.modal input::placeholder,.modal textarea::placeholder{color:var(--muted)}
+.modal textarea{resize:vertical;min-height:52px;line-height:1.5}
+.modal-hint{font-size:10px;color:var(--muted);margin-top:-6px}
+.modal-btns{display:flex;gap:8px;margin-top:4px}
+.btn-cancel{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--muted2);padding:10px;cursor:pointer;font-size:13px}
+.btn-confirm{flex:2;background:var(--accent);border:none;border-radius:7px;color:#fff;padding:10px;cursor:pointer;font-size:13px;font-weight:700}
+
 @media(max-width:600px){
   .wl-head,.wl-row{grid-template-columns:2fr 1fr 1fr 1.2fr}
   .wl-head>div:nth-child(4),.wl-row>div:nth-child(4){display:none}
@@ -126,6 +143,34 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 </style>
 </head>
 <body>
+
+<!-- 題材新增 Modal -->
+<div class="modal-backdrop" id="topic-modal" onclick="e=>{if(e.target===this)closeModal()}">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">新增題材</div>
+    <div>
+      <label>題材名稱</label>
+      <input id="m-title" placeholder="如：AI PC、低軌衛星">
+    </div>
+    <div>
+      <label>一線主角</label>
+      <textarea id="m-t1" placeholder="台積電 2330, 聯發科 2454" rows="2"></textarea>
+      <div class="modal-hint">格式：名稱 代碼，逗號分隔</div>
+    </div>
+    <div>
+      <label>二線跟漲</label>
+      <textarea id="m-t2" placeholder="日月光 3711, 矽品 2325" rows="2"></textarea>
+    </div>
+    <div>
+      <label>三線題材</label>
+      <textarea id="m-t3" placeholder="長科 6548, 景碩 3189" rows="2"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-confirm" onclick="confirmAddTopic()">加入</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">AD Stock X Dashboard <em>_v3</em></div>
@@ -365,7 +410,7 @@ function drawHeatmap(){
   d3.treemap().size([W,H]).padding(2).round(true)(root);
 
   const maxAbs = Math.max(...items.map(d=>Math.abs(d.chg)),0.1);
-  const cs = d3.scaleLinear().domain([-maxAbs,0,maxAbs]).range(['#8b1a2a','#181b24','#0a6644']).clamp(true);
+  const cs = d3.scaleLinear().domain([-maxAbs,0,maxAbs]).range(['#0a6644','#181b24','#8b1a2a']).clamp(true);
 
   const tip = document.getElementById('hm-tip');
   const cell = svg.selectAll('g').data(root.leaves()).enter().append('g')
@@ -400,7 +445,7 @@ function drawHeatmap(){
       // 漲跌
       g.append('text').attr('x',w/2).attr('y',h/2+(hasRoom4Lines?8:12))
         .attr('text-anchor','middle').attr('dominant-baseline','middle')
-        .attr('fill',d.data.chg>0?'rgba(120,255,200,.9)':'rgba(255,120,130,.9)')
+        .attr('fill',d.data.chg>0?'rgba(255,160,160,.9)':'rgba(120,220,170,.9)')
         .attr('font-size',chgFontSize).attr('font-weight','600')
         .text((d.data.chg>=0?'+':'')+d.data.chg.toFixed(1)+'%');
       // 乖離率（空間夠才顯示）
@@ -558,14 +603,32 @@ async function renderTopics(){
 }
 
 function openAddTopic(){
-  const title=prompt('題材名稱（如：AI PC）'); if(!title) return;
-  const parse=s=>s?s.split(',').map(x=>{ const p=x.trim().split(' '); return {n:p[0],c:p[1]||''}; }).filter(s=>s.c):[];
-  topics[title]={
-    tier1:parse(prompt('一線：格式「台積電 2330, 聯發科 2454」')),
-    tier2:parse(prompt('二線：同格式')),
-    tier3:parse(prompt('三線：同格式')),
+  document.getElementById('m-title').value='';
+  document.getElementById('m-t1').value='';
+  document.getElementById('m-t2').value='';
+  document.getElementById('m-t3').value='';
+  document.getElementById('topic-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('m-title').focus(), 100);
+}
+
+function closeModal(){
+  document.getElementById('topic-modal').classList.remove('open');
+}
+
+function confirmAddTopic(){
+  const title = document.getElementById('m-title').value.trim();
+  if(!title){ document.getElementById('m-title').focus(); return; }
+  const parse = s => s ? s.split(',').map(x=>{
+    const p = x.trim().split(/\s+/);
+    return p.length >= 2 ? {n:p[0], c:p[p.length-1]} : null;
+  }).filter(Boolean) : [];
+  topics[title] = {
+    tier1: parse(document.getElementById('m-t1').value),
+    tier2: parse(document.getElementById('m-t2').value),
+    tier3: parse(document.getElementById('m-t3').value),
   };
-  localStorage.setItem('adsx_top',JSON.stringify(topics));
+  localStorage.setItem('adsx_top', JSON.stringify(topics));
+  closeModal();
   renderTopics();
 }
 
