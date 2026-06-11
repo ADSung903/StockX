@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股市雷達站</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --bg2: #161922;
+    --bg3: #1e2230;
+    --border: rgba(255,255,255,0.07);
+    --text: #e8eaf0;
+    --muted: #7a8099;
+    --up: #26a69a;
+    --down: #ef5350;
+    --accent: #5c7cfa;
+    --warn: #ffa726;
+    --tag: #2a2f45;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 100; }
+  .logo { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; color: var(--text); }
+  .logo span { color: var(--accent); }
+  .update-time { font-size: 11px; color: var(--muted); }
+
+  .layout { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 12px; max-width: 1200px; margin: 0 auto; }
+  @media (min-width: 900px) { .layout { grid-template-columns: 1fr 1fr; } }
+
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .card-full { grid-column: 1 / -1; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+  .card-body { padding: 10px 14px; }
+
+  /* 全球市場 */
+  .markets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mkt { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
+  .mkt-name { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .mkt-val { font-size: 17px; font-weight: 600; }
+  .mkt-chg { font-size: 12px; margin-top: 2px; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .neutral { color: var(--muted); }
+
+  /* 自選股 */
+  .stock-list { display: flex; flex-direction: column; gap: 2px; }
+  .stock-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr 1fr; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--border); gap: 4px; }
+  .stock-row:last-child { border-bottom: none; }
+  .stock-row.header { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 6px; }
+  .stock-name { font-weight: 500; font-size: 13px; }
+  .stock-code { font-size: 10px; color: var(--muted); }
+  .stock-price { font-weight: 600; text-align: right; }
+  .stock-chg { text-align: right; font-size: 12px; }
+  .stock-ma { text-align: right; font-size: 12px; }
+  .ma-above { color: var(--up); }
+  .ma-below { color: var(--down); }
+  .ma-near { color: var(--warn); }
+  .chip-bar { display: flex; align-items: center; gap: 3px; justify-content: flex-end; }
+  .chip { font-size: 10px; padding: 2px 5px; border-radius: 4px; font-weight: 500; }
+  .chip-clean { background: rgba(38,166,154,0.15); color: var(--up); }
+  .chip-warn { background: rgba(255,167,38,0.15); color: var(--warn); }
+  .chip-danger { background: rgba(239,83,80,0.15); color: var(--down); }
+  .del-btn { color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; background: none; border: none; }
+  .del-btn:hover { color: var(--down); }
+
+  /* 新增股票 */
+  .add-row { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .add-row input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 13px; outline: none; }
+  .add-row input:focus { border-color: var(--accent); }
+  .add-row input::placeholder { color: var(--muted); }
+  .add-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .add-btn:hover { background: #4a6ae0; }
+
+  /* 題材分層 */
+  .topic-section { margin-bottom: 12px; }
+  .topic-label { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 6px; }
+  .topic-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .topic-tag { background: var(--tag); color: var(--text); font-size: 12px; padding: 4px 9px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; transition: border-color 0.15s; }
+  .topic-tag:hover { border-color: var(--accent); }
+  .topic-tag.tier1 { border-left: 2px solid var(--up); }
+  .topic-tag.tier2 { border-left: 2px solid var(--warn); }
+  .topic-tag.tier3 { border-left: 2px solid var(--muted); }
+
+  /* 說明 */
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--border); }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* loading */
+  .loading { color: var(--muted); font-size: 13px; padding: 14px 0; text-align: center; }
+  .error-msg { color: var(--down); font-size: 12px; padding: 8px 0; }
+
+  /* TradingView */
+  .tv-widget { border-radius: 0 0 10px 10px; overflow: hidden; }
+
+  /* 資金流向 */
+  .flow-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .flow-item { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
+  .flow-name { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .flow-bar-wrap { background: var(--bg); border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 5px; }
+  .flow-bar { height: 100%; border-radius: 4px; transition: width 0.4s; }
+  .flow-pct { font-size: 12px; font-weight: 600; }
+
+  @media (max-width: 480px) {
+    .markets-grid { grid-template-columns: 1fr 1fr; }
+    .stock-row { grid-template-columns: 2fr 1fr 1fr 1.1fr 0.6fr; }
+    .mkt-val { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">股市<span>雷達站</span></div>
+  <div class="update-time" id="update-time">載入中...</div>
+</header>
+
+<div class="layout">
+
+  <!-- 全球市場 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">全球市場</span>
+      <span style="font-size:11px;color:var(--muted)">延遲報價</span>
+    </div>
+    <div class="card-body">
+      <div class="markets-grid" id="markets-grid">
+        <div class="mkt"><div class="mkt-name">台指期</div><div class="mkt-val neutral" id="m-txf">—</div><div class="mkt-chg neutral" id="mc-txf">載入中</div></div>
+        <div class="mkt"><div class="mkt-name">費半 SOX</div><div class="mkt-val neutral" id="m-sox">—</div><div class="mkt-chg neutral" id="mc-sox">載入中</div></div>
+        <div class="mkt"><div class="mkt-name">S&P 500</div><div class="mkt-val neutral" id="m-spy">—</div><div class="mkt-chg neutral" id="mc-spy">載入中</div></div>
+        <div class="mkt"><div class="mkt-name">那斯達克</div><div class="mkt-val neutral" id="m-qqq">—</div><div class="mkt-chg neutral" id="mc-qqq">載入中</div></div>
+        <div class="mkt"><div class="mkt-name">日經225</div><div class="mkt-val neutral" id="m-nk">—</div><div class="mkt-chg neutral" id="mc-nk">載入中</div></div>
+        <div class="mkt"><div class="mkt-name">韓綜KOSPI</div><div class="mkt-val neutral" id="m-ks">—</div><div class="mkt-chg neutral" id="mc-ks">載入中</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 資金產業流向 -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">台股產業資金流向</span>
+      <span style="font-size:11px;color:var(--muted)">T+1</span>
+    </div>
+    <div class="card-body">
+      <div class="flow-grid" id="flow-grid">
+        <div class="loading" style="grid-column:1/-1">載入中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自選股 -->
+  <div class="card card-full">
+    <div class="card-header">
+      <span class="card-title">自選股追蹤</span>
+      <span style="font-size:11px;color:var(--muted)">Yahoo Finance · 延遲</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div style="padding:8px 14px 0">
+        <div class="stock-row header">
+          <div>股票</div>
+          <div style="text-align:right">現價</div>
+          <div style="text-align:right">漲跌%</div>
+          <div style="text-align:right">20MA位置</div>
+          <div style="text-align:right">籌碼</div>
+        </div>
+      </div>
+      <div id="stock-list" class="stock-list" style="padding:0 14px">
+        <div class="loading">載入中...</div>
+      </div>
+    </div>
+    <div class="add-row">
+      <input type="text" id="add-code" placeholder="輸入代碼，如 2330.TW 或 TSMC" maxlength="12">
+      <input type="text" id="add-name" placeholder="名稱，如 台積電" maxlength="6" style="max-width:90px">
+      <button class="add-btn" onclick="addStock()">+ 加入</button>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--up)"></div>20MA 之上</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>貼近 ±2%</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--down)"></div>20MA 之下</div>
+    </div>
+  </div>
+
+  <!-- 題材分層 -->
+  <div class="card card-full">
+    <div class="card-header">
+      <span class="card-title">題材概念股分層</span>
+      <button onclick="showAddTopic()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer">+ 編輯</button>
+    </div>
+    <div class="card-body" id="topic-body">
+      <div class="loading">載入中...</div>
+    </div>
+  </div>
+
+  <!-- TradingView 熱力圖 -->
+  <div class="card card-full">
+    <div class="card-header">
+      <span class="card-title">台股熱力圖</span>
+      <span style="font-size:11px;color:var(--muted)">TradingView</span>
+    </div>
+    <div class="tv-widget">
+      <div class="tradingview-widget-container" style="height:400px;width:100%">
+        <div class="tradingview-widget-container__widget" style="height:400px;width:100%"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js" async>
+        {
+          "exchanges": [],
+          "dataSource": "TWSE",
+          "grouping": "sector",
+          "blockSize": "market_cap_basic",
+          "blockColor": "change",
+          "locale": "zh_TW",
+          "symbolUrl": "",
+          "colorTheme": "dark",
+          "hasTopBar": false,
+          "isDataSetEnabled": false,
+          "isZoomEnabled": true,
+          "hasSymbolTooltip": true,
+          "isMonoSize": false,
+          "width": "100%",
+          "height": "400"
+        }
+        </script>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PROXY = 'https://api.allorigins.win/get?url=';
+
+const DEFAULT_STOCKS = [
+  { code: '0052.TW', name: '富邦科技', cost: 38.31 },
+  { code: '00878.TW', name: '00878', cost: 20.6 },
+  { code: '00915.TW', name: '00915', cost: 22.51 },
+  { code: '00981A.TW', name: '主動統一', cost: 26.91 },
+  { code: '2313.TW', name: '華通', cost: 273.93 },
+  { code: '2330.TW', name: '台積電', cost: 2059.52 },
+  { code: '2455.TW', name: '全新', cost: 250.85 },
+  { code: '3481.TW', name: '群創', cost: 46.73 },
+  { code: '4749.TW', name: '新應材', cost: 853.68 },
+];
+
+const DEFAULT_TOPICS = {
+  '低軌衛星 / SpaceX': {
+    tier1: ['群創 3481', '宸宇 6975'],
+    tier2: ['友達 2409', '台揚 2326'],
+    tier3: ['亞信 3169', '昇達科 3491'],
+  },
+  '光通訊 / AI 伺服器': {
+    tier1: ['華通 2313', '聯亞 3081'],
+    tier2: ['台光電 2383', '志超 8213'],
+    tier3: ['嘉澤 3533', '欣興 3037'],
+  },
+  'FOPLP 先進封裝': {
+    tier1: ['群創 3481', '友達 2409'],
+    tier2: ['友威科 3580', '晶彩科 3535'],
+    tier3: ['東捷 8064', '鈦昇 8027'],
+  },
+  'AI 晶片需求（護國神山）': {
+    tier1: ['台積電 2330'],
+    tier2: ['日月光 3711', '矽品 2325'],
+    tier3: ['南電 8046', '景碩 3189'],
+  },
+};
+
+const DEFAULT_FLOW = [
+  { name: '半導體', pct: 72, dir: 'up' },
+  { name: '光電面板', pct: 58, dir: 'up' },
+  { name: '電子零組件', pct: 45, dir: 'up' },
+  { name: '電腦周邊', pct: 38, dir: 'neutral' },
+  { name: '金融保險', pct: 31, dir: 'down' },
+  { name: '塑化鋼鐵', pct: 22, dir: 'down' },
+];
+
+function loadStocks() {
+  try { return JSON.parse(localStorage.getItem('stocks')) || DEFAULT_STOCKS; }
+  catch { return DEFAULT_STOCKS; }
+}
+function saveStocks(list) { localStorage.setItem('stocks', JSON.stringify(list)); }
+function loadTopics() {
+  try { return JSON.parse(localStorage.getItem('topics')) || DEFAULT_TOPICS; }
+  catch { return DEFAULT_TOPICS; }
+}
+function saveTopics(t) { localStorage.setItem('topics', JSON.stringify(t)); }
+
+let stocks = loadStocks();
+let topics = loadTopics();
+let stockData = {};
+
+async function fetchQuote(symbol) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=30d`;
+    const r = await fetch(PROXY + encodeURIComponent(url));
+    const j = await r.json();
+    const data = JSON.parse(j.contents);
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const closes = result.indicators.quote[0].close.filter(Boolean);
+    const ma20 = closes.length >= 20
+      ? closes.slice(-20).reduce((a, b) => a + b, 0) / 20
+      : null;
+    return {
+      price: meta.regularMarketPrice,
+      prevClose: meta.chartPreviousClose,
+      ma20,
+    };
+  } catch { return null; }
+}
+
+function maLabel(price, ma20) {
+  if (!ma20) return { text: '—', cls: 'neutral' };
+  const diff = ((price - ma20) / ma20) * 100;
+  if (diff > 2) return { text: `+${diff.toFixed(1)}%`, cls: 'ma-above' };
+  if (diff < -2) return { text: `${diff.toFixed(1)}%`, cls: 'ma-below' };
+  return { text: `${diff.toFixed(1)}%`, cls: 'ma-near' };
+}
+
+function chipLabel(price, ma20) {
+  if (!ma20) return { text: '未知', cls: 'chip-warn' };
+  const diff = ((price - ma20) / ma20) * 100;
+  if (diff > 5) return { text: '強勢', cls: 'chip-clean' };
+  if (diff > 0) return { text: '偏多', cls: 'chip-clean' };
+  if (diff > -5) return { text: '觀察', cls: 'chip-warn' };
+  return { text: '偏弱', cls: 'chip-danger' };
+}
+
+async function renderStocks() {
+  const el = document.getElementById('stock-list');
+  el.innerHTML = '<div class="loading">拉取報價中...</div>';
+  const results = await Promise.all(stocks.map(s => fetchQuote(s.code)));
+  results.forEach((r, i) => { if (r) stockData[stocks[i].code] = r; });
+
+  if (stocks.length === 0) {
+    el.innerHTML = '<div class="loading">尚無自選股，請新增</div>';
+    return;
+  }
+
+  el.innerHTML = stocks.map((s, i) => {
+    const d = stockData[s.code];
+    if (!d) return `<div class="stock-row">
+      <div><div class="stock-name">${s.name}</div><div class="stock-code">${s.code}</div></div>
+      <div class="stock-price neutral" colspan="4">無法取得</div>
+      <div></div><div></div>
+      <button class="del-btn" onclick="removeStock(${i})">×</button>
+    </div>`;
+    const chg = ((d.price - d.prevClose) / d.prevClose * 100);
+    const chgCls = chg > 0 ? 'up' : chg < 0 ? 'down' : 'neutral';
+    const ma = maLabel(d.price, d.ma20);
+    const chip = chipLabel(d.price, d.ma20);
+    const priceDisplay = d.price >= 100 ? d.price.toFixed(1) : d.price.toFixed(2);
+    return `<div class="stock-row">
+      <div><div class="stock-name">${s.name}</div><div class="stock-code">${s.code.replace('.TW','')}</div></div>
+      <div class="stock-price ${chgCls}">${priceDisplay}</div>
+      <div class="stock-chg ${chgCls}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</div>
+      <div class="stock-ma ${ma.cls}">${ma.text}</div>
+      <div class="chip-bar"><span class="chip ${chip.cls}">${chip.text}</span><button class="del-btn" onclick="removeStock(${i})" title="刪除">×</button></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('update-time').textContent = '更新：' + new Date().toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
+}
+
+function addStock() {
+  const code = document.getElementById('add-code').value.trim().toUpperCase();
+  const name = document.getElementById('add-name').value.trim() || code;
+  if (!code) return;
+  const formatted = code.includes('.') ? code : code + '.TW';
+  if (stocks.find(s => s.code === formatted)) { alert('已在清單中'); return; }
+  stocks.push({ code: formatted, name });
+  saveStocks(stocks);
+  document.getElementById('add-code').value = '';
+  document.getElementById('add-name').value = '';
+  renderStocks();
+}
+
+function removeStock(i) {
+  stocks.splice(i, 1);
+  saveStocks(stocks);
+  renderStocks();
+}
+
+function renderTopics() {
+  const el = document.getElementById('topic-body');
+  el.innerHTML = Object.entries(topics).map(([title, layers]) => `
+    <div class="topic-section">
+      <div class="topic-label">● ${title}</div>
+      <div class="topic-tags">
+        ${(layers.tier1||[]).map(t=>`<span class="topic-tag tier1">${t}</span>`).join('')}
+        ${(layers.tier2||[]).map(t=>`<span class="topic-tag tier2">${t}</span>`).join('')}
+        ${(layers.tier3||[]).map(t=>`<span class="topic-tag tier3">${t}</span>`).join('')}
+      </div>
+    </div>
+  `).join('') + `<div class="legend" style="border-top:none;padding:4px 0 0">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--up)"></div>一線主角</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>二線跟漲</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>三線題材</div>
+  </div>`;
+}
+
+function renderFlow() {
+  const el = document.getElementById('flow-grid');
+  const maxPct = Math.max(...DEFAULT_FLOW.map(f => f.pct));
+  el.innerHTML = DEFAULT_FLOW.map(f => {
+    const barColor = f.dir === 'up' ? 'var(--up)' : f.dir === 'down' ? 'var(--down)' : 'var(--muted)';
+    const textColor = f.dir === 'up' ? 'var(--up)' : f.dir === 'down' ? 'var(--down)' : 'var(--muted)';
+    return `<div class="flow-item">
+      <div class="flow-name">${f.name}</div>
+      <div class="flow-bar-wrap"><div class="flow-bar" style="width:${(f.pct/maxPct*100).toFixed(0)}%;background:${barColor}"></div></div>
+      <div class="flow-pct" style="color:${textColor}">${f.pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+async function fetchMarkets() {
+  const targets = [
+    { id: 'txf', sym: 'TX00.TW', name: '台指期' },
+    { id: 'sox', sym: 'SOXX', name: '費半ETF' },
+    { id: 'spy', sym: 'SPY', name: 'S&P500' },
+    { id: 'qqq', sym: 'QQQ', name: '那斯達克' },
+    { id: 'nk', sym: '^N225', name: '日經' },
+    { id: 'ks', sym: '^KS11', name: '韓綜' },
+  ];
+  await Promise.all(targets.map(async t => {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${t.sym}?interval=1d&range=2d`;
+      const r = await fetch(PROXY + encodeURIComponent(url));
+      const j = await r.json();
+      const data = JSON.parse(j.contents);
+      const meta = data.chart.result[0].meta;
+      const price = meta.regularMarketPrice;
+      const prev = meta.chartPreviousClose;
+      const chg = ((price - prev) / prev * 100);
+      const cls = chg > 0 ? 'up' : chg < 0 ? 'down' : 'neutral';
+      const priceStr = price >= 1000 ? price.toLocaleString('zh-TW', {maximumFractionDigits:0}) : price.toFixed(2);
+      document.getElementById(`m-${t.id}`).textContent = priceStr;
+      document.getElementById(`m-${t.id}`).className = `mkt-val ${cls}`;
+      document.getElementById(`mc-${t.id}`).textContent = `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`;
+      document.getElementById(`mc-${t.id}`).className = `mkt-chg ${cls}`;
+    } catch {
+      document.getElementById(`mc-${t.id}`).textContent = '無法取得';
+    }
+  }));
+}
+
+function showAddTopic() {
+  const name = prompt('新增題材名稱（例：AI PC）');
+  if (!name) return;
+  const t1 = prompt('一線主角（逗號分隔，可空白）') || '';
+  const t2 = prompt('二線跟漲（逗號分隔，可空白）') || '';
+  const t3 = prompt('三線題材（逗號分隔，可空白）') || '';
+  topics[name] = {
+    tier1: t1.split(',').map(s=>s.trim()).filter(Boolean),
+    tier2: t2.split(',').map(s=>s.trim()).filter(Boolean),
+    tier3: t3.split(',').map(s=>s.trim()).filter(Boolean),
+  };
+  saveTopics(topics);
+  renderTopics();
+}
+
+document.getElementById('add-code').addEventListener('keydown', e => { if (e.key === 'Enter') addStock(); });
+
+(async () => {
+  renderFlow();
+  renderTopics();
+  fetchMarkets();
+  await renderStocks();
+})();
+
+setInterval(() => { fetchMarkets(); renderStocks(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
