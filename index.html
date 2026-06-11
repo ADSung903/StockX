@@ -282,26 +282,34 @@ const cache = {};
 const CHART_TTL  = 5*60*1000;
 const FUND_TTL   = 60*60*1000;
 
+// ─── 頁面 debug 面板 ──────────────────────
+const _logs=[];
+function dbg(...args){
+  const msg=args.map(a=>typeof a==='object'?JSON.stringify(a):String(a)).join(' ');
+  _logs.push(msg);
+  const el=document.getElementById('debug-panel');
+  if(el){ el.textContent=_logs.slice(-20).join('\n'); }
+  console.log(...args);
+}
+
 // ─── 呼叫自己的 Vercel API ─────────────────
 async function apiQuote(symbols){
-  if(!symbols||!symbols.length) return;
-  const need = symbols.filter(s=>{
-    const c=cache[s]; return !c || Date.now()-c.ts > CHART_TTL;
-  });
-  console.log('[apiQuote] need:', need.length, need.slice(0,3));
-  if(!need.length) return;
+  if(!symbols||!symbols.length){ dbg('[Q] symbols 空'); return; }
+  const need = symbols.filter(s=>{ const c=cache[s]; return !c||Date.now()-c.ts>CHART_TTL; });
+  dbg('[Q] need:',need.length, '/', symbols.length);
+  if(!need.length){ dbg('[Q] 全部命中快取'); return; }
   try{
-    const url = `/api/quote?symbols=${need.join(',')}`;
-    console.log('[apiQuote] fetching:', url);
-    const r = await fetch(url);
-    console.log('[apiQuote] status:', r.status);
-    const d = await r.json();
-    console.log('[apiQuote] keys:', Object.keys(d).length, 'sample:', JSON.stringify(Object.entries(d)[0]));
-    Object.entries(d).forEach(([sym,q])=>{
-      if(q) cache[sym]={...q, ts:Date.now()};
-    });
-    console.log('[apiQuote] cache size:', Object.keys(cache).length);
-  }catch(e){ console.error('[apiQuote] ERROR:', e); }
+    const url=`/api/quote?symbols=${need.join(',')}`;
+    dbg('[Q] fetch:', url.slice(0,80));
+    const r=await fetch(url);
+    dbg('[Q] status:', r.status);
+    if(!r.ok){ dbg('[Q] 錯誤:', r.status, r.statusText); return; }
+    const d=await r.json();
+    const keys=Object.keys(d);
+    dbg('[Q] 回傳:', keys.length, '筆, 範例:', keys[0], JSON.stringify(d[keys[0]])?.slice(0,60));
+    keys.forEach(sym=>{ if(d[sym]) cache[sym]={...d[sym],ts:Date.now()}; });
+    dbg('[Q] cache:', Object.keys(cache).length, '筆');
+  }catch(e){ dbg('[Q] ERROR:', e.message); }
 }
 
 async function apiFundamental(symbols){
@@ -702,9 +710,9 @@ async function renderWatchlist(){
 
   el.innerHTML='<div class="loading-msg">拉取報價中…</div>';
   const codes=watchList.map(w=>w.code);
-  console.log('[watchlist] fetching:', codes);
+  dbg('[WL] codes:', codes.join(','));
   await apiQuote(codes);
-  console.log('[watchlist] cache after fetch:', codes.map(c=>c+':'+( cache[c]?cache[c].price:'miss')).join(', '));
+  dbg('[WL] cache after:', codes.map(c=>cache[c]?'✓':'✗').join(''));
 
   el.innerHTML=watchList.map((w,i)=>{
     const q=cache[w.code];
@@ -776,6 +784,23 @@ async function init(){
 
 init();
 setInterval(()=>{ init(); }, 6*60*1000);
+
+// debug 面板初始化
+setTimeout(()=>{
+  const el=document.getElementById('debug-panel');
+  if(el) el.textContent=_logs.slice(-20).join('\n')||'（等待資料）';
+},500);
 </script>
+
+<!-- debug 面板，確認問題後可刪除 -->
+<div style="margin:12px;background:#0d1117;border:1px solid #30363d;border-radius:8px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #30363d">
+    <span style="font-size:11px;color:#7e8aa8;font-weight:700">DEBUG LOG</span>
+    <button onclick="document.getElementById('debug-wrap').style.display='none'" style="font-size:11px;color:#7e8aa8;background:none;border:none;cursor:pointer">隱藏</button>
+  </div>
+  <div id="debug-wrap">
+    <pre id="debug-panel" style="font-size:10px;color:#58a6ff;padding:10px 12px;margin:0;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;line-height:1.6">等待資料…</pre>
+  </div>
+</div>
 </body>
 </html>
