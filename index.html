@@ -100,14 +100,17 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .tri-yellow{background:rgba(240,165,0,.08);border:1px solid rgba(240,165,0,.2);color:var(--warn)}
 .tri-green{background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.2);color:var(--up)}
 
-.add-row{display:flex;gap:7px;padding:10px 14px;border-top:1px solid var(--border);flex-wrap:wrap}
-.add-row input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:12px;outline:none;min-width:0}
+.add-row{display:grid;grid-template-columns:1fr 72px 72px auto;gap:6px;padding:10px 14px;border-top:1px solid var(--border);align-items:center}
+.add-row input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:12px;outline:none;min-width:0;width:100%}
 .add-row input:focus{border-color:var(--accent)}
 .add-row input::placeholder{color:var(--muted)}
-.inp-code{flex:1.5}
-.inp-name{flex:1;max-width:80px}
-.inp-cost{flex:1;max-width:80px}
-.add-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap}
+.inp-code{} .inp-name{} .inp-cost{}
+.add-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;height:100%}
+@media(max-width:480px){
+  .add-row{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}
+  .inp-code{grid-column:1/-1}
+  .add-btn{grid-column:2;grid-row:2}
+}
 .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 2px;line-height:1}
 .del-btn:hover{color:var(--down)}
 
@@ -558,48 +561,60 @@ let watchList = JSON.parse(localStorage.getItem('adsx_wl')||'null') || [
   {code:'00915.TW',name:'00915',cost:22.51},
 ];
 
-// ─── 題材渲染 ─────────────────────────────
-async function renderTopics(){
-  const el=document.getElementById('topic-body');
-  el.innerHTML='<div class="loading-msg">拉取報價…</div>';
-  const allCodes=[...new Set(Object.values(topics).flatMap(t=>[...t.tier1,...t.tier2,...t.tier3].map(s=>s.c+'.TW')))];
-  await apiQuote(allCodes);
-  el.innerHTML='<div class="loading-msg">拉取體質資料…</div>';
-  await apiFundamental(allCodes);
+// ─── 題材 pill HTML ───────────────────────
+function buildPill(s, withFund){
+  const sym=s.c+'.TW', q=cache[sym], f=withFund?cache[sym+'_f']:null;
+  const chg=q?q.chg:null, bias=q?q.bias:null;
+  const qs=qualityScore(f);
+  const pc=chg===null?'var(--muted2)':chg>0?'var(--up)':chg<0?'var(--down)':'var(--muted2)';
+  return `<div class="spill" id="pill-${s.c}">
+    <div class="sp-code">${s.c}</div>
+    <div class="sp-name">${s.n}</div>
+    <div class="sp-price" style="color:${pc}">${q?fp(q.price):'—'}${chg!==null?`<span style="font-size:10px;margin-left:3px">${fc(chg)}</span>`:''}
+    </div>
+    <div class="sp-badges">
+      <span class="tag ${biasCls(bias)}" style="font-size:9px">${fb(bias)}</span>
+      ${isUnexploded(bias,qs)?'<span class="tag tg" style="font-size:9px">未爆</span>':''}
+    </div>
+    <div style="margin-top:4px;display:flex;align-items:center;gap:4px">${qualityDots(qs)}<span style="font-size:9px;color:var(--muted)">體質</span></div>
+  </div>`;
+}
 
-  el.innerHTML=Object.entries(topics).map(([title,tiers])=>{
+function buildTopicHTML(){
+  return Object.entries(topics).map(([title,tiers])=>{
     const temp=topicTemp(tiers);
+    const rows=[{key:'tier1',l:'一線',lc:'t1l'},{key:'tier2',l:'二線',lc:'t2l'},{key:'tier3',l:'三線',lc:'t3l'}]
+      .map(({key,l,lc})=>{
+        const stocks=tiers[key]||[];
+        if(!stocks.length) return '';
+        return `<div class="tier-row"><div class="tier-lbl ${lc}">${l}</div><div class="tier-stocks">${stocks.map(s=>buildPill(s,false)).join('')}</div></div>`;
+      }).join('');
     return `<div class="topic-block">
-      <div class="topic-header">
-        <div class="topic-name">${title}</div>
-        ${tempHTML(temp)}
-      </div>
-      <div class="tier-wrap">
-        ${[{key:'tier1',l:'一線',lc:'t1l'},{key:'tier2',l:'二線',lc:'t2l'},{key:'tier3',l:'三線',lc:'t3l'}].map(({key,l,lc})=>{
-          const stocks=tiers[key]||[];
-          if(!stocks.length) return '';
-          const pills=stocks.map(s=>{
-            const sym=s.c+'.TW', q=cache[sym], f=cache[sym+'_f'];
-            const chg=q?q.chg:null, bias=q?q.bias:null;
-            const qs=qualityScore(f);
-            const pc=chg===null?'var(--muted2)':chg>0?'var(--up)':chg<0?'var(--down)':'var(--muted2)';
-            return `<div class="spill">
-              <div class="sp-code">${s.c}</div>
-              <div class="sp-name">${s.n}</div>
-              <div class="sp-price" style="color:${pc}">${q?fp(q.price):'—'}${chg!==null?`<span style="font-size:10px;margin-left:3px">${fc(chg)}</span>`:''}
-              </div>
-              <div class="sp-badges">
-                <span class="tag ${biasCls(bias)}" style="font-size:9px">${fb(bias)}</span>
-                ${isUnexploded(bias,qs)?'<span class="tag tg" style="font-size:9px">未爆</span>':''}
-              </div>
-              <div style="margin-top:4px;display:flex;align-items:center;gap:4px">${qualityDots(qs)}<span style="font-size:9px;color:var(--muted)">體質</span></div>
-            </div>`;
-          }).join('');
-          return `<div class="tier-row"><div class="tier-lbl ${lc}">${l}</div><div class="tier-stocks">${pills}</div></div>`;
-        }).join('')}
-      </div>
+      <div class="topic-header"><div class="topic-name">${title}</div>${tempHTML(temp)}</div>
+      <div class="tier-wrap">${rows}</div>
     </div>`;
   }).join('') || '<div class="loading-msg">尚無題材資料</div>';
+}
+
+// ─── 題材渲染（股價先出，體質非同步補上）────
+async function renderTopics(){
+  const el=document.getElementById('topic-body');
+  el.innerHTML='<div class="loading-msg">拉取報價中…</div>';
+  const allCodes=[...new Set(Object.values(topics).flatMap(t=>[...t.tier1,...t.tier2,...t.tier3].map(s=>s.c+'.TW')))];
+
+  // 先拉股價，立刻渲染
+  await apiQuote(allCodes);
+  el.innerHTML = buildTopicHTML();
+
+  // 體質資料背景拉，拉到了再更新各 pill（不阻塞畫面）
+  apiFundamental(allCodes).then(()=>{
+    allCodes.forEach(sym=>{
+      const code=sym.replace('.TW','');
+      const s={c:code, n:NAMES[code]||code};
+      const el=document.getElementById('pill-'+code);
+      if(el) el.outerHTML=buildPill(s, true);
+    });
+  });
 }
 
 function openAddTopic(){
