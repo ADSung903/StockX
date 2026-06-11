@@ -281,24 +281,24 @@ const FUND_TTL   = 60*60*1000;
 
 // ─── 呼叫自己的 Vercel API ─────────────────
 async function apiQuote(symbols){
+  if(!symbols||!symbols.length) return;
   const need = symbols.filter(s=>{
     const c=cache[s]; return !c || Date.now()-c.ts > CHART_TTL;
   });
   console.log('[apiQuote] need:', need.length, need.slice(0,3));
-  if(need.length){
-    try{
-      const url = `/api/quote?symbols=${need.join(',')}`;
-      console.log('[apiQuote] fetching:', url);
-      const r = await fetch(url);
-      console.log('[apiQuote] status:', r.status);
-      const d = await r.json();
-      console.log('[apiQuote] keys:', Object.keys(d).length, 'sample:', JSON.stringify(Object.entries(d)[0]));
-      Object.entries(d).forEach(([sym,q])=>{
-        if(q) cache[sym]={...q, ts:Date.now()};
-      });
-      console.log('[apiQuote] cache size:', Object.keys(cache).length);
-    }catch(e){ console.error('[apiQuote] ERROR:', e); }
-  }
+  if(!need.length) return;
+  try{
+    const url = `/api/quote?symbols=${need.join(',')}`;
+    console.log('[apiQuote] fetching:', url);
+    const r = await fetch(url);
+    console.log('[apiQuote] status:', r.status);
+    const d = await r.json();
+    console.log('[apiQuote] keys:', Object.keys(d).length, 'sample:', JSON.stringify(Object.entries(d)[0]));
+    Object.entries(d).forEach(([sym,q])=>{
+      if(q) cache[sym]={...q, ts:Date.now()};
+    });
+    console.log('[apiQuote] cache size:', Object.keys(cache).length);
+  }catch(e){ console.error('[apiQuote] ERROR:', e); }
 }
 
 async function apiFundamental(symbols){
@@ -695,12 +695,18 @@ function triAlert(cost,price,ma20){
 
 async function renderWatchlist(){
   const el=document.getElementById('wl-list');
-  await apiQuote(watchList.map(w=>w.code));
-  if(!watchList.length){ el.innerHTML='<div class="loading-msg">尚無自選股</div>'; return; }
+  if(!watchList.length){ el.innerHTML='<div class="loading-msg">尚無自選股，請新增</div>'; return; }
+
+  el.innerHTML='<div class="loading-msg">拉取報價中…</div>';
+  const codes=watchList.map(w=>w.code);
+  console.log('[watchlist] fetching:', codes);
+  await apiQuote(codes);
+  console.log('[watchlist] cache after fetch:', codes.map(c=>c+':'+( cache[c]?cache[c].price:'miss')).join(', '));
+
   el.innerHTML=watchList.map((w,i)=>{
     const q=cache[w.code];
     if(!q) return `<div class="wl-row">
-      <div><div class="wl-name">${w.name}</div><div class="wl-code">${w.code.replace('.TW','')}</div></div>
+      <div><div class="wl-name">${w.name}</div><div class="wl-code">${w.code.replace('.TW','')}</div><div style="font-size:10px;color:var(--down)">無法取得報價</div></div>
       <div class="wl-num cm">—</div><div></div><div></div>
       <div class="wl-badges"><button class="del-btn" onclick="rmWatch(${i})">×</button></div></div>`;
     const cls=q.chg>0?'cu':q.chg<0?'cd':'cm';
